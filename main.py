@@ -4,38 +4,36 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
-from settings import FIREFOX_PATH, GECKODRIVER_PATH, FIREFOX_PROFILE_PATH, RUN_HEADLESS
-import time
+from settings import FIREFOX_PATH, FIREFOX_PROFILE_PATH, RUN_HEADLESS
 import pandas as pd
 from tqdm import tqdm
-from dates import *
+from utils import *
 
 def scrape_crossword(crossword_html):
     # We scrape the data using beautiful soup
     soup = BeautifulSoup(crossword_html, "lxml")
 
 def main():
+    driver = None
     start_date = "20230102"
     end_date = "20240101"
     date_list = date_range(start_date, end_date)
     try:
         # Setup the browser
         options = webdriver.FirefoxOptions()
-        options.add_argument('--start-maximized')
         if(RUN_HEADLESS):
             options.add_argument('--headless')
         profile = webdriver.FirefoxProfile(FIREFOX_PROFILE_PATH)
-        driver = webdriver.Firefox(firefox_binary=FIREFOX_PATH, executable_path=GECKODRIVER_PATH, options=options, firefox_profile=profile)
-        driver.maximize_window()
+        driver = webdriver.Firefox(firefox_binary=FIREFOX_PATH, executable_path="geckodriver.exe", options=options, firefox_profile=profile)
         acceptedCookies = False
         pbar = tqdm(date_list)
         for date in pbar:
             # Open page
             driver.get(f'https://elpais.com/juegos/crucigramas/mambrino/?id=elpais-mambrino_{date}_0300')
 
-            # Cookie consent in first iteration
+            # Cookie consent needs to be given in first iteration
             if not acceptedCookies:
-                pbar.update(1) # add dummy it. for getting more precise avg. time
+                pbar.update(1) # Add dummy it. for getting more precise avg. time
                 try:
                     cookie_consent_button = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '.pmConsentWall-button')))
                     cookie_consent_button.click()
@@ -54,7 +52,8 @@ def main():
             pbar.set_description(f"Current data: {convert_to_long_format(date)}")
 
     except (TimeoutException, WebDriverException) as e:
-        print(f"An error occurred: {str(e)}")
+        print(f"An error in the web driver occurred!")
+        print(str(e))
 
     finally:
         # Close the browser
