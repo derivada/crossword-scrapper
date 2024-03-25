@@ -13,6 +13,18 @@ The goal is to learn how web scraping works, along with doing some nice data ana
 6. Preferably, use a VPN just in case your IP gets banned (altough this small number of requests shouldn't be deemed harmful by the server)
 7. Enjoy!
 
+## Data scheme
+type - The crossword collection type
+date - The date in format YYYY/MM/DD
+layout - A binary matrix with 0s for originally empty cells and 1s for grey cells
+letters - The solution letter matrix, with grey cells represented by '-'
+vclues - The vertical clues text
+vclues_pos - The (x, y) position of the vertical word starts
+vclues_len - The word length of the clue
+hclues - The horizontal clues text
+hclues_pos - The (x, y) position of the horizontal word starts
+hclues_len - The word length of the clue
+
 ## Technologies:
 - Mozilla Firefox' Gecko Driver, the bot version of mozilla
 - Selenium, the web driver adapter that allows us to automatically navigate and click through the pages to handle dynamic content extraction
