@@ -4,17 +4,20 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
-from settings import FIREFOX_PATH, FIREFOX_PROFILE_PATH, RUN_HEADLESS
+from settings import FIREFOX_PATH, FIREFOX_PROFILE_PATH, RUN_HEADLESS, CROSSWORD_COLLECTION
 from tqdm import tqdm
 from utils import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_heatmap(matrix, last_it):
+# First visualization, a dynamic heatmap showing the most common spots for gray cells
+def plot_heatmap(matrix, last_it, total_crosswords):
     plt.clf()  # Clear the current figure
     plt.imshow(matrix, cmap='gray_r', interpolation='nearest')
     plt.colorbar()
-    plt.title('Heatmap de celdas grises en crucigramas de Mambrino')
+    plt.title(f'Heatmap de celdas grises en crucigramas {CROSSWORD_COLLECTION.capitalize()}, crucigramas vistos: {total_crosswords}')
+    word_length_avg = np.mean(np.array(words))
+    plt.text(1, -1.5, f"Longitud palabra media: {word_length_avg:.2f}", fontsize=12, ha='center')
     if not last_it:
         plt.pause(0.1)
         plt.draw()
@@ -22,12 +25,15 @@ def plot_heatmap(matrix, last_it):
         plt.show()
 
 sum_matrix = None
+words = []
+total_crosswords = 0
+
 def scrape_crossword(crossword_html, last_it):
-    global sum_matrix
+    global sum_matrix, total_crosswords
     # We scrape the data using beautiful soup
     soup = BeautifulSoup(crossword_html, "lxml")
     grid = soup.find(class_="crossword")
-    rows = []; row = -1
+    rows = [[]]; row = 0
     for div in grid.find_all('div', recursive=False):
         # letters
         if 'class' in div.attrs and 'endRow' in div['class']:
@@ -36,20 +42,53 @@ def scrape_crossword(crossword_html, last_it):
         elif 'class' in div.attrs and 'prerevealed-box' not in div['class']:
             rows[row].append(0 if div.find('span') else 1)
     
-    # Last row is empty and gets deleted
+    # Last row is empty and gets deleted, first row may also be empty (in mambrinus and tarkus because of first col numbers in the top)
     del rows[-1]
+    if len(rows[0]) == 0:
+        del rows[0] 
     matrix = np.array(rows)
+
+    # Get the average word length
+    curr_len = 0
+
+    # TODO fix, this takes into account horizontal strips of length 1 that are words (they appear in mambrino/tarkus), should use clue info
+    # Horizontal words
+    for i in range(0, matrix.shape[0]):
+        for j in range(0, matrix.shape[1]):
+            if(matrix[i, j] == 0):
+                curr_len += 1
+            elif curr_len > 1:
+                words.append(curr_len)
+                curr_len = 0
+        if curr_len > 1:
+            words.append(curr_len)
+        curr_len = 0
+    # Vertical words
+    for j in range(0, matrix.shape[0]-1):
+        for i in range(0, matrix.shape[1]-1):
+            if(matrix[i, j] == 0):
+                curr_len += 1
+            elif curr_len > 1:
+                words.append(curr_len)
+                curr_len = 0
+        if curr_len > 1:
+            words.append(curr_len)
+        curr_len = 0
+
     if sum_matrix is None:
         sum_matrix = matrix
     else:
         sum_matrix += matrix
-    normalized_matrix = sum_matrix / np.max(sum_matrix)
-    plot_heatmap(normalized_matrix, last_it)
+    print(sum_matrix)
+    total_crosswords += 1
+    normalized_matrix = sum_matrix / total_crosswords
+    plot_heatmap(normalized_matrix, last_it, total_crosswords)
+
 
 def main():
     driver = None
     start_date = "20230102"
-    end_date = "20230120"
+    end_date = "20230110"
     date_list = date_range(start_date, end_date)
     try:
         # Setup the browser
@@ -62,7 +101,8 @@ def main():
         pbar = tqdm(date_list)
         for i, date in enumerate(pbar):
             # Open page
-            driver.get(f'https://elpais.com/juegos/crucigramas/mambrino/?id=elpais-mambrino_{date}_0300')
+            url = f'https://elpais.com/juegos/crucigramas/{CROSSWORD_COLLECTION}/?id=elpais-{CROSSWORD_COLLECTION}_{date}_0300'
+            driver.get(url)
 
             # Cookie consent needs to be given in first iteration
             if not acceptedCookies:
