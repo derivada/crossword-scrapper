@@ -19,11 +19,11 @@ date - The date in format YYYY/MM/DD
 layout - A binary matrix with 0s for originally empty cells and 1s for grey cells
 letters - The solution letter matrix, with grey cells represented by '-'
 vclues - The vertical clues text
-vclues_pos - The (x, y) position of the vertical word starts
-vclues_len - The word length of the clue
+vclues_pos - The (x, y) position (0-indexed) of the vertical word starts
+vclues_len - The word lengths of the answers to the vertical clues
 hclues - The horizontal clues text
-hclues_pos - The (x, y) position of the horizontal word starts
-hclues_len - The word length of the clue
+hclues_pos - The (x, y) position (0-indexed) of the horizontal word starts
+hclues_len - The word lengths of the answers to the horizontal clues
 
 ## Technologies:
 - Mozilla Firefox' Gecko Driver, the bot version of mozilla
