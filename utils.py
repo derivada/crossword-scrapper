@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import sys
 
 def convert_to_long_format(date_str):
     # Convert the string to a datetime object
@@ -16,3 +17,28 @@ def date_range(start_date, end_date):
         dates.append(start.strftime("%Y%m%d"))
         start += timedelta(days=1)
     return dates
+
+def data_size(data):
+    num = get_size(data)
+    suffix = 'B'
+    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
+
+
+def get_size(obj, seen=None):
+    size = sys.getsizeof(obj)
+    if seen is None:
+        seen = set()
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    seen.add(obj_id)
+    if isinstance(obj, dict):
+        size += sum(get_size(v, seen) for v in obj.values())
+        size += sum(get_size(k, seen) for k in obj.keys())
+    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+        size += sum(get_size(i, seen) for i in obj)
+    return size

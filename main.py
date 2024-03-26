@@ -4,7 +4,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
-from settings import FIREFOX_PATH, FIREFOX_PROFILE_PATH, RUN_HEADLESS, CROSSWORD_COLLECTION
+from settings import *
 from tqdm import tqdm
 from utils import *
 from time import sleep
@@ -68,28 +68,33 @@ def extract_clues_len_and_pos(driver, clue_list_div):
         
     return (np.array(positions), np.array(lengths))
 
+def setup_browser():
+    options = webdriver.FirefoxOptions()
+    if(RUN_HEADLESS):
+        options.add_argument('--headless')
+    profile = webdriver.FirefoxProfile(FIREFOX_PROFILE_PATH)
+    driver = webdriver.Firefox(firefox_binary=FIREFOX_PATH, executable_path="geckodriver.exe", options=options, firefox_profile=profile)
+    return driver
+
 def main():
-    driver = None
-    start_date = "20200102"
-    end_date = "20230104"
-    date_list = date_range(start_date, end_date)
+    driver = None 
+
+    # Try opening the saved data file to not repeat work, if it doesn't exist start from zero
     try:
-        with open('data.pkl', 'rb') as f:
+        with open(DATA_FILE, 'rb') as f:
             loaded_data = pickle.load(f)
         data_dict = loaded_data
+        print(f"Found existing data with {len(data_dict)} entries")
+        print(f"Approximate size of loaded data: {data_size(data_dict)}")
     except FileNotFoundError:
         data_dict = {}
         print("Data file not found. Initializing an empty data dictionary.")
     
     try:
-        # Setup the browser
-        options = webdriver.FirefoxOptions()
-        if(RUN_HEADLESS):
-            options.add_argument('--headless')
-        profile = webdriver.FirefoxProfile(FIREFOX_PROFILE_PATH)
-        driver = webdriver.Firefox(firefox_binary=FIREFOX_PATH, executable_path="geckodriver.exe", options=options, firefox_profile=profile)
+        driver = setup_browser()
+        
         acceptedCookies = False
-        pbar = tqdm(date_list)
+        pbar = tqdm(date_range(START_DATE, END_DATE))
         for i, date in enumerate(pbar):
             type = CROSSWORD_COLLECTION
             if((type, date) in data_dict): # Already on data CSV
@@ -98,16 +103,16 @@ def main():
             # Open page
             url = f'https://elpais.com/juegos/crucigramas/{CROSSWORD_COLLECTION}/?id=elpais-{CROSSWORD_COLLECTION}_{date}_0300'
             driver.get(url)
+
             # Cookie consent needs to be given in first iteration
             if not acceptedCookies:
-                pbar.update(1) # Add dummy it. for getting more precise avg. time
                 try:
                     cookie_consent_button = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '.pmConsentWall-button')))
                     cookie_consent_button.click()
                     acceptedCookies = True
                 except TimeoutException:
                     pass  # Continue even if no cookie consent popup is found
-
+            
             # Wait for crossword iframe to load and switch to it
             crossword_iframe = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, '.gm_i-c iframe')))
             driver.switch_to.frame(crossword_iframe)
@@ -116,7 +121,6 @@ def main():
             try:
                 sleep(1)
                 crossword = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, '.puzzle-type-crossword')))
-                # Additionally check at least a cell has been loaded
             except TimeoutException:
                 # Invalid crossword URL
                 continue
@@ -127,15 +131,15 @@ def main():
             soup = BeautifulSoup(crossword_html, "lxml")
             layout = get_crossword_layout(soup, False)
 
-            # Get the clue text, along with (x, y) positions and word lengths
-            # horizontal
+            # Get the clue texts, along with (x, y) positions and word lengths
             WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, '.aclues')))
             hor_clues_html = soup.find(class_="aclues")
             hclues = np.array([str(element.string) for element in hor_clues_html.find_all(class_='clueText')])
             ver_clues_html = soup.find(class_="dclues")
             vclues = np.array([str(element.string) for element in ver_clues_html.find_all(class_='clueText')])
-
+ 
             # Click on every clue to get the length of the word and its starting position
+            # This step is the slowest, comment if not needed
             # Horizontals
             clue_list_div = driver.find_element(By.CSS_SELECTOR, '.aclues .clue-list')
             hclues_pos, hclues_len = extract_clues_len_and_pos(driver, clue_list_div)
@@ -162,10 +166,11 @@ def main():
             row_data = {'type': type, 'date': date, 'layout': layout, 'hclues': hclues, 'vclues': vclues, 'vclues_pos': vclues_pos, 
                         'vclues_len': vclues_len, 'hclues_pos': hclues_pos, 'hclues_len': hclues_len, 'letters': letters}
             data_dict[(type, date)] = row_data
-        # Save data
-        with open('data.pkl', 'wb') as f:
-            pickle.dump(data_dict, f)
-
+            # Save data to file. This is unefficient since we are saving the entire dict in each iteration,
+            # but it is better than the program crashing and losing all data
+            with open(DATA_FILE, 'wb') as f:
+                pickle.dump(data_dict, f)
+            
     except (TimeoutException, WebDriverException) as e:
         print(f"An error in the web driver occurred!")
         print(str(e))
